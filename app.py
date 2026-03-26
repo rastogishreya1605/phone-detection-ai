@@ -4,10 +4,10 @@ import numpy as np
 from ultralytics import YOLO
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
-# Better model (more accurate)
+# Load better model
 model = YOLO("yolov8s.pt")
 
-st.title("📱 Phone Detection AI - Final Clean App")
+st.title("📱 Phone Detection AI - Final Pro App")
 
 # ------------------ DETECTION FUNCTION ------------------
 def detect(img):
@@ -20,7 +20,6 @@ def detect(img):
             label = model.names[cls]
             conf = float(box.conf[0])
 
-            # ✅ Correct detection
             if label == "cell phone" and conf > 0.4:
                 phone_count += 1
 
@@ -36,6 +35,7 @@ def detect(img):
 
 # ------------------ MODE ------------------
 option = st.radio("Choose Mode", ["Upload Image", "Capture Photo", "Live Webcam"])
+
 
 # ------------------ UPLOAD ------------------
 if option == "Upload Image":
@@ -56,7 +56,7 @@ if option == "Upload Image":
             st.warning("No phone detected ❌")
 
 
-# ------------------ CAMERA ------------------
+# ------------------ CAPTURE ------------------
 elif option == "Capture Photo":
     cam = st.camera_input("Take Photo")
 
@@ -75,39 +75,50 @@ elif option == "Capture Photo":
             st.warning("No phone detected ❌")
 
 
-# ------------------ LIVE ------------------
+# ------------------ LIVE WEBCAM ------------------
 elif option == "Live Webcam":
 
-    st.write("🎥 Live detection running... Click capture")
+    st.write("🎥 Live detection running...")
+
+    if "phone_detected" not in st.session_state:
+        st.session_state.phone_detected = False
 
     class VideoTransformer(VideoTransformerBase):
-        def __init__(self):
-            self.last_frame = None
-
         def transform(self, frame):
             img = frame.to_ndarray(format="bgr24")
-            img, _ = detect(img)
+            results = model(img)
 
-            self.last_frame = img
+            phone_found = False
+
+            for r in results:
+                for box in r.boxes:
+                    cls = int(box.cls[0])
+                    label = model.names[cls]
+                    conf = float(box.conf[0])
+
+                    if label == "cell phone" and conf > 0.4:
+                        phone_found = True
+
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        label_text = f"{label} ({conf:.2f})"
+
+                        cv2.rectangle(img, (x1,y1), (x2,y2), (0,255,0), 2)
+                        cv2.putText(img, label_text, (x1,y1-10),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+
+            # store result
+            st.session_state.phone_detected = phone_found
+
             return img
 
-    ctx = webrtc_streamer(
+    webrtc_streamer(
         key="webcam",
         video_transformer_factory=VideoTransformer
     )
 
-    if ctx.video_transformer:
-        if st.button("📸 Capture Result"):
-            frame = ctx.video_transformer.last_frame
-
-            if frame is not None:
-                img, count = detect(frame)
-
-                st.image(img, channels="BGR")
-                st.subheader(f"📱 Phones detected: {count}")
-
-                if count > 0:
-                    st.success("Phone detected ✅")
-                    st.audio("alarm.wav", autoplay=True)
-                else:
-                    st.warning("No phone detected ❌")
+    # 🔥 RESULT + SOUND
+    if st.session_state.phone_detected:
+        st.success("📱 Phone detected in live camera!")
+        st.audio("alarm.wav", autoplay=True)
+    else:
+        st.warning("No phone detected ❌")

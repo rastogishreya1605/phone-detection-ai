@@ -22,7 +22,8 @@ def detect(img):
             conf = float(box.conf[0])
             label_text = f"{label} ({conf:.2f})"
 
-            if label == "cell phone":
+            # ✅ FIX: better condition
+            if "phone" in label.lower():
                 phone_count += 1
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -51,9 +52,9 @@ if option == "Upload Image":
         st.subheader(f"📱 Phones detected: {count}")
 
         if count == 0:
-            st.warning("No phone detected")
+            st.warning("No phone detected ❌")
         else:
-            st.success("Phone detected")
+            st.success("Phone detected ✅")
 
 
 # ------------------ CAMERA CAPTURE ------------------
@@ -70,9 +71,9 @@ elif option == "Capture Photo":
         st.subheader(f"📱 Phones detected: {count}")
 
         if count == 0:
-            st.warning("No phone detected")
+            st.warning("No phone detected ❌")
         else:
-            st.success("Phone detected")
+            st.success("Phone detected ✅")
 
 
 # ------------------ LIVE WEBCAM ------------------
@@ -88,7 +89,7 @@ elif option == "Live Webcam":
             img = frame.to_ndarray(format="bgr24")
             img, _ = detect(img)
 
-            self.last_frame = img  # store last frame
+            self.last_frame = img
             return img
 
     ctx = webrtc_streamer(
@@ -96,7 +97,6 @@ elif option == "Live Webcam":
         video_transformer_factory=VideoTransformer
     )
 
-    # Capture button
     if ctx.video_transformer:
         if st.button("📸 Capture Result"):
             frame = ctx.video_transformer.last_frame
@@ -108,6 +108,6 @@ elif option == "Live Webcam":
                 st.subheader(f"📱 Phones detected: {count}")
 
                 if count == 0:
-                    st.warning("No phone detected")
+                    st.warning("No phone detected ❌")
                 else:
-                    st.success("Phone detected")
+                    st.success("Phone detected ✅")

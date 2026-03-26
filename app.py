@@ -1,106 +1,65 @@
-import streamlit as st
 import cv2
-import numpy as np
 from ultralytics import YOLO
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+from pygame import mixer
+import os
 
-# Load model
-model = YOLO("yolov8s.pt")
+# --- 1. Sound Setup ---
+mixer.init()
+SOUND_FILE = "alarm.wav"
+if os.path.exists(SOUND_FILE):
+    mixer.music.load(SOUND_FILE)
+    print("✅ Sound Loaded!")
 
-st.title("📱 Phone Detection AI - Final Fixed App")
+# --- 2. Model Load ---
+model = YOLO("yolov8n.pt") 
+cap = cv2.VideoCapture(0)
+is_playing = False
 
-# ------------------ DETECTION FUNCTION ------------------
-def detect(img):
-    results = model(img)
-    phone_count = 0
+print("\n🚀 Scanner Start! Phone dikhao...")
+
+while True:
+    ret, frame = cap.read()
+    if not ret: break
+
+    # Detection (Confidence 0.4 rakha hai)
+    results = model(frame, conf=0.4, stream=True)
+    phone_found = False
 
     for r in results:
         for box in r.boxes:
-            cls = int(box.cls[0])
-            label = model.names[cls]
-            conf = float(box.conf[0])
-
-            if label == "cell phone" and conf > 0.4:
-                phone_count += 1
-
+            label = model.names[int(box.cls[0])]
+            
+            if label == "cell phone":
+                phone_found = True
+                # Bounding Box Coordinates
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-                label_text = f"{label} ({conf:.2f})"
+                
+                # 🟢 1. Green Rectangle draw karna
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 4)
+                
+                # 📝 2. "PHONE DETECTED" Text likhna (Screen par)
+                # Font scale 1.2 aur Thickness 3 rakha hai taaki bada dikhe
+                cv2.putText(frame, "PHONE DETECTED", (x1, y1 - 15),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
 
-                cv2.rectangle(img, (x1,y1), (x2,y2), (0,255,0), 2)
-                cv2.putText(img, label_text, (x1,y1-10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+    # --- 3. Sound Control ---
+    if phone_found:
+        if not is_playing:
+            mixer.music.play(-1)
+            is_playing = True
+            print("🚨 Phone Detected! Sound ON")
+    else:
+        if is_playing:
+            mixer.music.stop()
+            is_playing = False
+            print("✅ Phone Removed! Sound OFF")
 
-    return img, phone_count
+    # Display Window
+    cv2.imshow("Real-time AI Detector", frame)
 
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
-# ------------------ MODE ------------------
-option = st.radio("Choose Mode", ["Upload Image", "Capture Photo", "Live Webcam"])
-
-# ------------------ UPLOAD ------------------
-if option == "Upload Image":
-    file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
-
-    if file:
-        img = cv2.imdecode(np.frombuffer(file.read(), np.uint8), 1)
-        img, count = detect(img)
-
-        st.image(img, channels="BGR")
-        st.subheader(f"📱 Phones detected: {count}")
-
-        if count > 0:
-            st.success("Phone detected ✅")
-            st.audio("alarm.wav", autoplay=True)
-        else:
-            st.warning("No phone detected ❌")
-
-
-# ------------------ CAPTURE PHOTO ------------------
-elif option == "Capture Photo":
-    st.write("📷 Click below to capture image")
-
-    cam = st.camera_input("Take Photo")
-
-    if cam:
-        img = cv2.imdecode(np.frombuffer(cam.read(), np.uint8), 1)
-        img, count = detect(img)
-
-        st.image(img, channels="BGR")
-        st.subheader(f"📱 Phones detected: {count}")
-
-        if count > 0:
-            st.success("Phone detected ✅")
-            st.audio("alarm.wav", autoplay=True)
-        else:
-            st.warning("No phone detected ❌")
-
-
-# ------------------ LIVE WEBCAM ------------------
-elif option == "Live Webcam":
-
-    st.write("🎥 Live detection running...")
-
-    class VideoTransformer(VideoTransformerBase):
-        def transform(self, frame):
-            img = frame.to_ndarray(format="bgr24")
-            results = model(img)
-
-            for r in results:
-                for box in r.boxes:
-                    cls = int(box.cls[0])
-                    label = model.names[cls]
-                    conf = float(box.conf[0])
-
-                    if label == "cell phone" and conf > 0.4:
-                        x1, y1, x2, y2 = map(int, box.xyxy[0])
-                        label_text = f"{label} ({conf:.2f})"
-
-                        cv2.rectangle(img, (x1,y1), (x2,y2), (0,255,0), 2)
-                        cv2.putText(img, label_text, (x1,y1-10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
-
-            return img
-
-    webrtc_streamer(
-        key="webcam",
-        video_transformer_factory=VideoTransformer
-    )
+cap.release()
+cv2.destroyAllWindows()
+mixer.quit()

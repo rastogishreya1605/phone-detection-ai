@@ -1,8 +1,10 @@
+from alarm import play_alarm
 import streamlit as st
 import cv2
 import numpy as np
 from ultralytics import YOLO
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+from alarm import play_alarm   # ✅ import
 
 # Load model
 model = YOLO("yolov8n.pt")
@@ -22,7 +24,6 @@ def detect(img):
             conf = float(box.conf[0])
             label_text = f"{label} ({conf:.2f})"
 
-            # ✅ FIX: better condition
             if "phone" in label.lower():
                 phone_count += 1
 
@@ -51,10 +52,12 @@ if option == "Upload Image":
         st.image(img, channels="BGR")
         st.subheader(f"📱 Phones detected: {count}")
 
+        # ✅ ALERT LOGIC
         if count == 0:
             st.warning("No phone detected ❌")
         else:
             st.success("Phone detected ✅")
+            play_alarm()
 
 
 # ------------------ CAMERA CAPTURE ------------------
@@ -70,10 +73,12 @@ elif option == "Capture Photo":
         st.image(img, channels="BGR")
         st.subheader(f"📱 Phones detected: {count}")
 
+        # ✅ ALERT LOGIC
         if count == 0:
             st.warning("No phone detected ❌")
         else:
             st.success("Phone detected ✅")
+            play_alarm()
 
 
 # ------------------ LIVE WEBCAM ------------------
@@ -107,7 +112,9 @@ elif option == "Live Webcam":
                 st.image(img, channels="BGR")
                 st.subheader(f"📱 Phones detected: {count}")
 
+                # ✅ ALERT LOGIC
                 if count == 0:
                     st.warning("No phone detected ❌")
                 else:
                     st.success("Phone detected ✅")
+                    play_alarm()

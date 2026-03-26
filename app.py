@@ -3,9 +3,8 @@ from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 from ultralytics import YOLO
 import cv2
 import base64
-
-# --- 1. Sound Setup (Browser side) ---
-# Apni 'alarm.wav' file ko base64 mein convert karke browser ko bhejenge
+import os 
+import numpy as np
 def get_audio_html(file_path):
     with open(file_path, "rb") as f:
         data = f.read()

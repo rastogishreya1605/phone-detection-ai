@@ -26,6 +26,7 @@ def detect(img):
                 phone_count += 1
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
+
                 cv2.rectangle(img, (x1, y1), (x2, y2), (0,255,0), 2)
                 cv2.putText(img, label_text, (x1, y1-10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
@@ -36,7 +37,7 @@ def detect(img):
 # ------------------ MODE SELECT ------------------
 option = st.radio("Choose Mode", ["Upload Image", "Capture Photo", "Live Webcam"])
 
-# ------------------ UPLOAD ------------------
+# ------------------ UPLOAD IMAGE ------------------
 if option == "Upload Image":
     file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
@@ -45,8 +46,15 @@ if option == "Upload Image":
         img = cv2.imdecode(bytes_data, 1)
 
         img, count = detect(img)
+
         st.image(img, channels="BGR")
         st.subheader(f"📱 Phones detected: {count}")
+
+        if count == 0:
+            st.warning("No phone detected")
+        else:
+            st.success("Phone detected")
+
 
 # ------------------ CAMERA CAPTURE ------------------
 elif option == "Capture Photo":
@@ -57,16 +65,49 @@ elif option == "Capture Photo":
         img = cv2.imdecode(bytes_data, 1)
 
         img, count = detect(img)
+
         st.image(img, channels="BGR")
         st.subheader(f"📱 Phones detected: {count}")
+
+        if count == 0:
+            st.warning("No phone detected")
+        else:
+            st.success("Phone detected")
+
 
 # ------------------ LIVE WEBCAM ------------------
 elif option == "Live Webcam":
 
+    st.write("🎥 Live detection running... Click capture to save result")
+
     class VideoTransformer(VideoTransformerBase):
+        def __init__(self):
+            self.last_frame = None
+
         def transform(self, frame):
             img = frame.to_ndarray(format="bgr24")
             img, _ = detect(img)
+
+            self.last_frame = img  # store last frame
             return img
 
-    webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
+    ctx = webrtc_streamer(
+        key="webcam",
+        video_transformer_factory=VideoTransformer
+    )
+
+    # Capture button
+    if ctx.video_transformer:
+        if st.button("📸 Capture Result"):
+            frame = ctx.video_transformer.last_frame
+
+            if frame is not None:
+                img, count = detect(frame)
+
+                st.image(img, channels="BGR")
+                st.subheader(f"📱 Phones detected: {count}")
+
+                if count == 0:
+                    st.warning("No phone detected")
+                else:
+                    st.success("Phone detected")

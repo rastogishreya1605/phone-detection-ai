@@ -4,10 +4,10 @@ import numpy as np
 from ultralytics import YOLO
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
-# Load model (better accuracy)
-model = YOLO("yolov8n.pt")
+# Better model (more accurate)
+model = YOLO("yolov8s.pt")
 
-st.title("📱 Phone Detection AI - Final App")
+st.title("📱 Phone Detection AI - Final Clean App")
 
 # ------------------ DETECTION FUNCTION ------------------
 def detect(img):
@@ -18,72 +18,67 @@ def detect(img):
         for box in r.boxes:
             cls = int(box.cls[0])
             label = model.names[cls]
-
             conf = float(box.conf[0])
 
-            # ✅ ONLY correct class
-            if label == "cell phone":
+            # ✅ Correct detection
+            if label == "cell phone" and conf > 0.4:
                 phone_count += 1
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 label_text = f"{label} ({conf:.2f})"
 
-                cv2.rectangle(img, (x1, y1), (x2, y2), (0,255,0), 2)
-                cv2.putText(img, label_text, (x1, y1-10),
+                cv2.rectangle(img, (x1,y1), (x2,y2), (0,255,0), 2)
+                cv2.putText(img, label_text, (x1,y1-10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
 
     return img, phone_count
 
 
-# ------------------ MODE SELECT ------------------
+# ------------------ MODE ------------------
 option = st.radio("Choose Mode", ["Upload Image", "Capture Photo", "Live Webcam"])
 
-# ------------------ UPLOAD IMAGE ------------------
+# ------------------ UPLOAD ------------------
 if option == "Upload Image":
     file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
     if file:
-        bytes_data = np.asarray(bytearray(file.read()), dtype=np.uint8)
-        img = cv2.imdecode(bytes_data, 1)
+        img = cv2.imdecode(np.frombuffer(file.read(), np.uint8), 1)
 
         img, count = detect(img)
 
         st.image(img, channels="BGR")
         st.subheader(f"📱 Phones detected: {count}")
 
-        # ✅ ALERT + SOUND
-        if count == 0:
-            st.warning("No phone detected ❌")
-        else:
+        if count > 0:
             st.success("Phone detected ✅")
-            st.audio("alarm.wav", format="audio/wav")
+            st.audio("alarm.wav", autoplay=True)
+        else:
+            st.warning("No phone detected ❌")
 
 
-# ------------------ CAMERA CAPTURE ------------------
+# ------------------ CAMERA ------------------
 elif option == "Capture Photo":
     cam = st.camera_input("Take Photo")
 
     if cam:
-        bytes_data = np.asarray(bytearray(cam.read()), dtype=np.uint8)
-        img = cv2.imdecode(bytes_data, 1)
+        img = cv2.imdecode(np.frombuffer(cam.read(), np.uint8), 1)
 
         img, count = detect(img)
 
         st.image(img, channels="BGR")
         st.subheader(f"📱 Phones detected: {count}")
 
-        # ✅ ALERT + SOUND
-        if count == 0:
-            st.warning("No phone detected ❌")
-        else:
+        if count > 0:
             st.success("Phone detected ✅")
-            st.audio("alarm.wav", format="audio/wav")
+            st.audio("alarm.wav", autoplay=True)
+        else:
+            st.warning("No phone detected ❌")
 
 
-# ------------------ LIVE WEBCAM ------------------
+# ------------------ LIVE ------------------
 elif option == "Live Webcam":
 
-    st.write("🎥 Live detection running... Click capture to save result")
+    st.write("🎥 Live detection running... Click capture")
 
     class VideoTransformer(VideoTransformerBase):
         def __init__(self):
@@ -111,9 +106,8 @@ elif option == "Live Webcam":
                 st.image(img, channels="BGR")
                 st.subheader(f"📱 Phones detected: {count}")
 
-                # ✅ ALERT + SOUND
-                if count == 0:
-                    st.warning("No phone detected ❌")
-                else:
+                if count > 0:
                     st.success("Phone detected ✅")
-                    st.audio("alarm.wav", format="audio/wav")
+                    st.audio("alarm.wav", autoplay=True)
+                else:
+                    st.warning("No phone detected ❌")

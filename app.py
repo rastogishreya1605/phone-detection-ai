@@ -7,7 +7,7 @@ from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 # Load better model
 model = YOLO("yolov8s.pt")
 
-st.title("📱 Phone Detection AI - Final Pro App")
+st.title("📱 Phone Detection AI - Final App")
 
 # ------------------ DETECTION FUNCTION ------------------
 def detect(img):
@@ -37,7 +37,7 @@ def detect(img):
 option = st.radio("Choose Mode", ["Upload Image", "Capture Photo", "Live Webcam"])
 
 
-# ------------------ UPLOAD ------------------
+# ------------------ UPLOAD IMAGE ------------------
 if option == "Upload Image":
     file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
@@ -56,7 +56,7 @@ if option == "Upload Image":
             st.warning("No phone detected ❌")
 
 
-# ------------------ CAPTURE ------------------
+# ------------------ CAMERA CAPTURE ------------------
 elif option == "Capture Photo":
     cam = st.camera_input("Take Photo")
 
@@ -83,6 +83,9 @@ elif option == "Live Webcam":
     if "phone_detected" not in st.session_state:
         st.session_state.phone_detected = False
 
+    if "alert_played" not in st.session_state:
+        st.session_state.alert_played = False
+
     class VideoTransformer(VideoTransformerBase):
         def transform(self, frame):
             img = frame.to_ndarray(format="bgr24")
@@ -106,9 +109,7 @@ elif option == "Live Webcam":
                         cv2.putText(img, label_text, (x1,y1-10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
 
-            # store result
             st.session_state.phone_detected = phone_found
-
             return img
 
     webrtc_streamer(
@@ -116,9 +117,13 @@ elif option == "Live Webcam":
         video_transformer_factory=VideoTransformer
     )
 
-    # 🔥 RESULT + SOUND
+    # ✅ CLEAN RESULT DISPLAY
     if st.session_state.phone_detected:
-        st.success("📱 Phone detected in live camera!")
-        st.audio("alarm.wav", autoplay=True)
+        st.success("📱 Phone detected!")
+
+        # 🔊 play only once
+        if not st.session_state.alert_played:
+            st.audio("alarm.wav", autoplay=True)
+            st.session_state.alert_played = True
     else:
-        st.warning("No phone detected ❌")
+        st.session_state.alert_played = False

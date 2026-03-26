@@ -1,65 +1,67 @@
-import cv2
+import streamlit as st
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 from ultralytics import YOLO
-from pygame import mixer
-import os
+import cv2
+import base64
 
-# --- 1. Sound Setup ---
-mixer.init()
-SOUND_FILE = "alarm.wav"
-if os.path.exists(SOUND_FILE):
-    mixer.music.load(SOUND_FILE)
-    print("✅ Sound Loaded!")
+# --- 1. Sound Setup (Browser side) ---
+# Apni 'alarm.wav' file ko base64 mein convert karke browser ko bhejenge
+def get_audio_html(file_path):
+    with open(file_path, "rb") as f:
+        data = f.read()
+        b64 = base64.b64encode(data).decode()
+    return f"""
+        <audio id="alarm-audio" loop>
+            <source src="data:audio/wav;base64,{b64}" type="audio/wav">
+        </audio>
+        <script>
+            var audio = document.getElementById('alarm-audio');
+            window.parent.document.addEventListener('phone_detected', function(e) {{
+                if (e.detail) {{ audio.play(); }}
+                else {{ audio.pause(); audio.currentTime = 0; }}
+            }});
+        </script>
+    """
 
-# --- 2. Model Load ---
-model = YOLO("yolov8n.pt") 
-cap = cv2.VideoCapture(0)
-is_playing = False
+st.title("📱 Live Phone Detector with Sound")
 
-print("\n🚀 Scanner Start! Phone dikhao...")
+# Model Load
+model = YOLO("yolov8n.pt")
 
-while True:
-    ret, frame = cap.read()
-    if not ret: break
+# HTML Audio Inject karna
+if os.path.exists("alarm.wav"):
+    st.components.v1.html(get_audio_html("alarm.wav"), height=0)
 
-    # Detection (Confidence 0.4 rakha hai)
-    results = model(frame, conf=0.4, stream=True)
-    phone_found = False
+class VideoTransformer(VideoTransformerBase):
+    def __init__(self):
+        self.phone_in_frame = False
 
-    for r in results:
-        for box in r.boxes:
-            label = model.names[int(box.cls[0])]
-            
-            if label == "cell phone":
-                phone_found = True
-                # Bounding Box Coordinates
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                
-                # 🟢 1. Green Rectangle draw karna
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 4)
-                
-                # 📝 2. "PHONE DETECTED" Text likhna (Screen par)
-                # Font scale 1.2 aur Thickness 3 rakha hai taaki bada dikhe
-                cv2.putText(frame, "PHONE DETECTED", (x1, y1 - 15),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+    def transform(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        results = model(img, conf=0.4)
+        
+        current_phone_detected = False
+        for r in results:
+            for box in r.boxes:
+                label = model.names[int(box.cls[0])]
+                if label == "cell phone":
+                    current_phone_detected = True
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 4)
+                    cv2.putText(img, "PHONE DETECTED", (x1, y1 - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-    # --- 3. Sound Control ---
-    if phone_found:
-        if not is_playing:
-            mixer.music.play(-1)
-            is_playing = True
-            print("🚨 Phone Detected! Sound ON")
-    else:
-        if is_playing:
-            mixer.music.stop()
-            is_playing = False
-            print("✅ Phone Removed! Sound OFF")
+        # JavaScript ko signal bhejna sound ke liye
+        if current_phone_detected != self.phone_in_frame:
+            self.phone_in_frame = current_phone_detected
+            val = "true" if current_phone_detected else "false"
+            st.components.v1.html(f"""
+                <script>
+                    var event = new CustomEvent('phone_detected', {{ detail: {val} }});
+                    window.parent.document.dispatchEvent(event);
+                </script>
+            """, height=0)
 
-    # Display Window
-    cv2.imshow("Real-time AI Detector", frame)
+        return img
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-cap.release()
-cv2.destroyAllWindows()
-mixer.quit()
+webrtc_streamer(key="phone-check", video_transformer_factory=VideoTransformer)

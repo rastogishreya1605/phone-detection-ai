@@ -1,15 +1,13 @@
-from alarm import play_alarm
 import streamlit as st
 import cv2
 import numpy as np
 from ultralytics import YOLO
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
-from alarm import play_alarm   # ✅ import
 
-# Load model
+# Load model (better accuracy)
 model = YOLO("yolov8n.pt")
 
-st.title("📱 Phone Detection AI - Pro App")
+st.title("📱 Phone Detection AI - Final App")
 
 # ------------------ DETECTION FUNCTION ------------------
 def detect(img):
@@ -22,12 +20,13 @@ def detect(img):
             label = model.names[cls]
 
             conf = float(box.conf[0])
-            label_text = f"{label} ({conf:.2f})"
 
-            if "phone" in label.lower():
+            # ✅ ONLY correct class
+            if label == "cell phone":
                 phone_count += 1
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
+                label_text = f"{label} ({conf:.2f})"
 
                 cv2.rectangle(img, (x1, y1), (x2, y2), (0,255,0), 2)
                 cv2.putText(img, label_text, (x1, y1-10),
@@ -52,12 +51,12 @@ if option == "Upload Image":
         st.image(img, channels="BGR")
         st.subheader(f"📱 Phones detected: {count}")
 
-        # ✅ ALERT LOGIC
+        # ✅ ALERT + SOUND
         if count == 0:
             st.warning("No phone detected ❌")
         else:
             st.success("Phone detected ✅")
-            play_alarm()
+            st.audio("alarm.wav", format="audio/wav")
 
 
 # ------------------ CAMERA CAPTURE ------------------
@@ -73,12 +72,12 @@ elif option == "Capture Photo":
         st.image(img, channels="BGR")
         st.subheader(f"📱 Phones detected: {count}")
 
-        # ✅ ALERT LOGIC
+        # ✅ ALERT + SOUND
         if count == 0:
             st.warning("No phone detected ❌")
         else:
             st.success("Phone detected ✅")
-            play_alarm()
+            st.audio("alarm.wav", format="audio/wav")
 
 
 # ------------------ LIVE WEBCAM ------------------
@@ -112,9 +111,9 @@ elif option == "Live Webcam":
                 st.image(img, channels="BGR")
                 st.subheader(f"📱 Phones detected: {count}")
 
-                # ✅ ALERT LOGIC
+                # ✅ ALERT + SOUND
                 if count == 0:
                     st.warning("No phone detected ❌")
                 else:
                     st.success("Phone detected ✅")
-                    play_alarm()
+                    st.audio("alarm.wav", format="audio/wav")

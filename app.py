@@ -16,7 +16,7 @@ except Exception as e:
 
 # --- STREAMLIT UI ---
 st.set_page_config(page_title="AI Phone Detector", layout="wide")
-st.title("📱 Real-time Phone Distraction Detection")
+st.title("📱 Phone Distraction Detection")
 
 # 1. Video aur Alerts ke liye Placeholders
 alert_placeholder = st.empty()  # Ye warning box ko control karega
@@ -56,7 +56,7 @@ while cap.isOpened() and not stop_button:
                 cv2.putText(frame, "PHONE DETECTED!", (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
 
-    # --- ALERT LOGIC (NEW & FIXED) ---
+    # --- ALERT LOGIC 
     if phone_detected:
         # Warning Box sirf ek baar dikhayega
         alert_placeholder.warning("⚠️ PHONE DETECTED! FOCUS ON YOUR WORK!")
@@ -69,7 +69,7 @@ while cap.isOpened() and not stop_button:
             except:
                 pass
     else:
-        # 2. JAise hi phone hatega, warning box khali (empty) ho jayega
+        #JAise hi phone hatega, warning box khali (empty) ho jayega
         alert_placeholder.empty()
         
         if pygame_available and alarm_playing:
@@ -84,5 +84,5 @@ while cap.isOpened() and not stop_button:
 
 cap.release()
 cv2.destroyAllWindows()
-alert_placeholder.empty() # Final cleanup
+alert_placeholder.empty() 
 st.success("Camera Closed Successfully.")

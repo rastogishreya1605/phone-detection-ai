@@ -1,63 +1,85 @@
+import streamlit as st
 import cv2
+import numpy as np
 from ultralytics import YOLO
-from pygame import mixer
-import os
+import time
 
-# --- 1. Sound Setup ---
-mixer.init()
-SOUND_FILE = "alarm.wav"
-if os.path.exists(SOUND_FILE):
-    mixer.music.load(SOUND_FILE)
-    print("✅ Sound Loaded!")
+# --- PYGAME CLOUD BYPASS ---
+try:
+    import pygame
+    pygame.mixer.init()
+    pygame_available = True
+    print("✅ Sound System Ready!")
+except Exception as e:
+    pygame_available = False
+    print("⚠️ Sound disabled (Cloud Mode)")
 
-# --- 2. Model Load ---
+# --- STREAMLIT UI ---
+st.set_page_config(page_title="AI Phone Detector", layout="wide")
+st.title("📱 Real-time Phone Distraction Detection")
+st.write("Ye AI camera se phone detect karta hai aur alarm bajata hai.")
+
+# YOLO Model Load karo
 model = YOLO("yolov8n.pt") 
+
+# Streamlit placeholder for video
+frame_placeholder = st.empty()
+stop_button = st.button("Stop Camera")
+
+# Camera Start
 cap = cv2.VideoCapture(0)
-is_playing = False
 
-print("\n Scanner Start! Phone dikhao...")
+# Alarm Status
+alarm_playing = False
 
-while True:
+while cap.isOpened() and not stop_button:
     ret, frame = cap.read()
-    if not ret: break
+    if not ret:
+        st.error("Camera nahi mil raha!")
+        break
 
-    # Detection 
-    results = model(frame, conf=0.4, stream=True)
-    phone_found = False
+    # YOLO Detection
+    results = model(frame, conf=0.5, verbose=False)
+    phone_detected = False
 
     for r in results:
         for box in r.boxes:
-            label = model.names[int(box.cls[0])]
+            cls = int(box.cls[0])
+            label = model.names[cls]
             
+            # Agar 'cell phone' detect hua
             if label == "cell phone":
-                phone_found = True
-                # Bounding Box Coordinates
+                phone_detected = True
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-                
-                # 🟢 1. Green Rectangle draw karna
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 4)
-                
-                cv2.putText(frame, "PHONE DETECTED", (x1, y1 - 15),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+                # Draw Red Box
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
+                cv2.putText(frame, "PHONE DETECTED!", (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
 
-    # --- 3. Sound Control ---
-    if phone_found:
-        if not is_playing:
-            mixer.music.play(-1)
-            is_playing = True
-            print("🚨 Phone Detected! Sound ON")
+    # Alarm Logic
+    if phone_detected:
+        if pygame_available and not alarm_playing:
+            try:
+                pygame.mixer.music.load("alarm.wav")
+                pygame.mixer.music.play(-1) # Loop play
+                alarm_playing = True
+            except:
+                pass
+        # Web Alert
+        st.warning("⚠️ PHONE DETECTED! FOCUS ON YOUR WORK!")
     else:
-        if is_playing:
-            mixer.music.stop()
-            is_playing = False
-            print("✅ Phone Removed! Sound OFF")
+        if pygame_available and alarm_playing:
+            pygame.mixer.music.stop()
+            alarm_playing = False
 
-    # Display Window
-    cv2.imshow("Real-time AI Detector", frame)
+    # --- CRITICAL FIX: STREAMLIT DISPLAY ---
+    # OpenCV BGR format use karta hai, Streamlit RGB mangta hai
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    frame_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    # Thoda gap taaki CPU blast na ho
+    time.sleep(0.01)
 
 cap.release()
 cv2.destroyAllWindows()
-mixer.quit()
+st.success("Camera Closed Successfully.")

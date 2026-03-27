@@ -1,5 +1,5 @@
-echo streamlit > requirements.txt
-echo opencv-python-headless >> requirements.txt
-echo ultralytics >> requirements.txt
-echo numpy >> requirements.txt
-echo pygame >> requirements.txt
+streamlit
+opencv-python-headless
+ultralytics
+numpy
+pygame

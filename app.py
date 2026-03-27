@@ -17,19 +17,19 @@ except Exception as e:
 # --- STREAMLIT UI ---
 st.set_page_config(page_title="AI Phone Detector", layout="wide")
 st.title("📱 Real-time Phone Distraction Detection")
-st.write("Ye AI camera se phone detect karta hai aur alarm bajata hai.")
+
+# 1. Video aur Alerts ke liye Placeholders
+alert_placeholder = st.empty()  # Ye warning box ko control karega
+frame_placeholder = st.empty()  # Ye video feed ko control karega
+stop_button = st.button("Stop Camera")
 
 # YOLO Model Load karo
 model = YOLO("yolov8n.pt") 
 
-# Streamlit placeholder for video
-frame_placeholder = st.empty()
-stop_button = st.button("Stop Camera")
-
 # Camera Start
 cap = cv2.VideoCapture(0)
 
-# Alarm Status
+# Status Variables
 alarm_playing = False
 
 while cap.isOpened() and not stop_button:
@@ -56,8 +56,11 @@ while cap.isOpened() and not stop_button:
                 cv2.putText(frame, "PHONE DETECTED!", (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
 
-    # Alarm Logic
+    # --- ALERT LOGIC (NEW & FIXED) ---
     if phone_detected:
+        # Warning Box sirf ek baar dikhayega
+        alert_placeholder.warning("⚠️ PHONE DETECTED! FOCUS ON YOUR WORK!")
+        
         if pygame_available and not alarm_playing:
             try:
                 pygame.mixer.music.load("alarm.wav")
@@ -65,21 +68,21 @@ while cap.isOpened() and not stop_button:
                 alarm_playing = True
             except:
                 pass
-        # Web Alert
-        st.warning("⚠️ PHONE DETECTED! FOCUS ON YOUR WORK!")
     else:
+        # 2. JAise hi phone hatega, warning box khali (empty) ho jayega
+        alert_placeholder.empty()
+        
         if pygame_available and alarm_playing:
             pygame.mixer.music.stop()
             alarm_playing = False
 
-    # --- CRITICAL FIX: STREAMLIT DISPLAY ---
-    # OpenCV BGR format use karta hai, Streamlit RGB mangta hai
+    # --- DISPLAY ---
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     frame_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
 
-    # Thoda gap taaki CPU blast na ho
     time.sleep(0.01)
 
 cap.release()
 cv2.destroyAllWindows()
+alert_placeholder.empty() # Final cleanup
 st.success("Camera Closed Successfully.")

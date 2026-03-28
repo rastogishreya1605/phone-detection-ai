@@ -2,7 +2,7 @@ import streamlit as st
 import cv2
 import numpy as np
 from ultralytics import YOLO
-import time
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 
 # --- PYGAME CLOUD BYPASS ---
 try:
@@ -18,71 +18,60 @@ except Exception as e:
 st.set_page_config(page_title="AI Phone Detector", layout="wide")
 st.title("📱 Phone Distraction Detection")
 
-# 1. Video aur Alerts ke liye Placeholders
-alert_placeholder = st.empty()  # Ye warning box ko control karega
-frame_placeholder = st.empty()  # Ye video feed ko control karega
-stop_button = st.button("Stop Camera")
+# YOLO Model Load (Caching use kar rahe hain taaki RAM kam kharch ho)
+@st.cache_resource
+def load_yolo():
+    return YOLO("yolov8n.pt")
 
-# YOLO Model Load karo
-model = YOLO("yolov8n.pt") 
+model = load_yolo()
 
-# Camera Start
-cap = cv2.VideoCapture(0)
+# --- VIDEO PROCESSOR CLASS (Aapka logic yahan hai) ---
+class PhoneDetector(VideoProcessorBase):
+    def __init__(self):
+        self.alarm_playing = False
 
-# Status Variables
-alarm_playing = False
-
-while cap.isOpened() and not stop_button:
-    ret, frame = cap.read()
-    if not ret:
-        st.error("Camera nahi mil raha!")
-        break
-
-    # YOLO Detection
-    results = model(frame, conf=0.5, verbose=False)
-    phone_detected = False
-
-    for r in results:
-        for box in r.boxes:
-            cls = int(box.cls[0])
-            label = model.names[cls]
-            
-            # Agar 'cell phone' detect hua
-            if label == "cell phone":
-                phone_detected = True
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                # Draw Red Box
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
-                cv2.putText(frame, "PHONE DETECTED!", (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
-
-    # --- ALERT LOGIC 
-    if phone_detected:
-        # Warning Box sirf ek baar dikhayega
-        alert_placeholder.warning("⚠️ PHONE DETECTED! FOCUS ON YOUR WORK!")
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
         
-        if pygame_available and not alarm_playing:
-            try:
-                pygame.mixer.music.load("alarm.wav")
-                pygame.mixer.music.play(-1) # Loop play
-                alarm_playing = True
-            except:
-                pass
-    else:
-        #JAise hi phone hatega, warning box khali (empty) ho jayega
-        alert_placeholder.empty()
-        
-        if pygame_available and alarm_playing:
-            pygame.mixer.music.stop()
-            alarm_playing = False
+        # YOLO Detection (Aapka Logic)
+        results = model(img, conf=0.5, verbose=False)
+        phone_detected = False
 
-    # --- DISPLAY ---
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    frame_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
+        for r in results:
+            for box in r.boxes:
+                cls = int(box.cls[0])
+                label = model.names[cls]
+                
+                if label == "cell phone":
+                    phone_detected = True
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 3)
+                    cv2.putText(img, "PHONE DETECTED!", (x1, y1 - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
 
-    time.sleep(0.01)
+        # Alert/Sound Logic (Render/Cloud Compatibility)
+        if phone_detected:
+            if pygame_available and not self.alarm_playing:
+                try:
+                    pygame.mixer.music.load("alarm.wav")
+                    pygame.mixer.music.play(-1)
+                    self.alarm_playing = True
+                except: pass
+        else:
+            if pygame_available and self.alarm_playing:
+                pygame.mixer.music.stop()
+                self.alarm_playing = False
 
-cap.release()
-cv2.destroyAllWindows()
-alert_placeholder.empty() 
-st.success("Camera Closed Successfully.")
+        return frame.from_ndarray(img, format="bgr24")
+
+# --- DISPLAY ---
+webrtc_streamer(
+    key="phone-detection",
+    video_processor_factory=PhoneDetector, # Yahan use hua hai processor
+    rtc_configuration={
+        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+    },
+    media_stream_constraints={"video": True, "audio": False},
+)
+
+st.info("Note: Click 'Start' to begin. Phone detection will trigger visual and sound alerts.")

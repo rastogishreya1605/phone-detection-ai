@@ -18,22 +18,18 @@ except Exception as e:
 st.set_page_config(page_title="AI Phone Detector", layout="wide")
 st.title("📱 Phone Distraction Detection")
 
-# YOLO Model Load (Caching use kar rahe hain taaki RAM kam kharch ho)
-@st.cache_resource
-def load_yolo():
-    return YOLO("yolov8n.pt")
+# YOLO Model Load karo
+model = YOLO("yolov8n.pt") 
 
-model = load_yolo()
-
-# --- VIDEO PROCESSOR CLASS (Aapka logic yahan hai) ---
-class PhoneDetector(VideoProcessorBase):
+# --- VIDEO PROCESSOR (Aapka logic yahan hai) ---
+class MyVideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.alarm_playing = False
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
-        
-        # YOLO Detection (Aapka Logic)
+
+        # YOLO Detection (Aapka original logic)
         results = model(img, conf=0.5, verbose=False)
         phone_detected = False
 
@@ -42,21 +38,24 @@ class PhoneDetector(VideoProcessorBase):
                 cls = int(box.cls[0])
                 label = model.names[cls]
                 
+                # Agar 'cell phone' detect hua
                 if label == "cell phone":
                     phone_detected = True
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    # Draw Red Box (Aapka style)
                     cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 3)
                     cv2.putText(img, "PHONE DETECTED!", (x1, y1 - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
 
-        # Alert/Sound Logic (Render/Cloud Compatibility)
+        # --- ALERT/SOUND LOGIC (Aapka logic) ---
         if phone_detected:
             if pygame_available and not self.alarm_playing:
                 try:
                     pygame.mixer.music.load("alarm.wav")
-                    pygame.mixer.music.play(-1)
+                    pygame.mixer.music.play(-1) # Loop play
                     self.alarm_playing = True
-                except: pass
+                except:
+                    pass
         else:
             if pygame_available and self.alarm_playing:
                 pygame.mixer.music.stop()
@@ -64,14 +63,14 @@ class PhoneDetector(VideoProcessorBase):
 
         return frame.from_ndarray(img, format="bgr24")
 
-# --- DISPLAY ---
+# --- DEPLOYMENT ---
 webrtc_streamer(
     key="phone-detection",
-    video_processor_factory=PhoneDetector, # Yahan use hua hai processor
+    video_processor_factory=MyVideoProcessor, # Sirf ye change kiya hai deploy ke liye
     rtc_configuration={
         "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
     },
     media_stream_constraints={"video": True, "audio": False},
 )
 
-st.info("Note: Click 'Start' to begin. Phone detection will trigger visual and sound alerts.")
+st.write("Click **Start** to begin tracking.")

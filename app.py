@@ -1,88 +1,45 @@
 import streamlit as st
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 import cv2
-import numpy as np
 from ultralytics import YOLO
-import time
 
-# --- PYGAME CLOUD BYPASS ---
-try:
-    import pygame
-    pygame.mixer.init()
-    pygame_available = True
-    print("✅ Sound System Ready!")
-except Exception as e:
-    pygame_available = False
-    print("⚠️ Sound disabled (Cloud Mode)")
+# YOLO Model Load
+model = YOLO("yolov8n.pt")
 
-# --- STREAMLIT UI ---
+class PhoneDetector(VideoTransformerBase):
+    def transform(self, frame):
+        # Frame ko array mein badalna
+        img = frame.to_ndarray(format="bgr24")
+        
+        # YOLO Detection 
+        results = model(img, conf=0.5, verbose=False)
+        
+        for r in results:
+            for box in r.boxes:
+                cls = int(box.cls[0])
+                # Agar "cell phone" detect hua (COCO dataset mein index 67 hota hai)
+                if model.names[cls] == "cell phone":
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    # Red color ka rectangle draw 
+                    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 3)
+                    # Label likhna
+                    cv2.putText(img, "PHONE DETECTED!", (x1, y1 - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        
+        return img
+
+# Streamlit UI
 st.set_page_config(page_title="AI Phone Detector", layout="wide")
-st.title("📱 Phone Distraction Detection")
+st.title("📱 Real-Time Phone Detection System")
+st.write("Click **'Start'** below and allow camera access to begin detection.")
 
-# 1. Video aur Alerts ke liye Placeholders
-alert_placeholder = st.empty()  # Ye warning box ko control karega
-frame_placeholder = st.empty()  # Ye video feed ko control karega
-stop_button = st.button("Stop Camera")
+# WebRTC Streamer (Browser camera ke liye)
+webrtc_streamer(
+    key="phone-detection",
+    video_transformer_factory=PhoneDetector,
+    rtc_configuration={
+        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+    }
+)
 
-# YOLO Model Load karo
-model = YOLO("yolov8n.pt") 
-
-# Camera Start
-cap = cv2.VideoCapture(0)
-
-# Status Variables
-alarm_playing = False
-
-while cap.isOpened() and not stop_button:
-    ret, frame = cap.read()
-    if not ret:
-        st.error("Camera nahi mil raha!")
-        break
-
-    # YOLO Detection
-    results = model(frame, conf=0.5, verbose=False)
-    phone_detected = False
-
-    for r in results:
-        for box in r.boxes:
-            cls = int(box.cls[0])
-            label = model.names[cls]
-            
-            # Agar 'cell phone' detect hua
-            if label == "cell phone":
-                phone_detected = True
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                # Draw Red Box
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
-                cv2.putText(frame, "PHONE DETECTED!", (x1, y1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
-
-    # --- ALERT LOGIC 
-    if phone_detected:
-        # Warning Box sirf ek baar dikhayega
-        alert_placeholder.warning("⚠️ PHONE DETECTED! FOCUS ON YOUR WORK!")
-        
-        if pygame_available and not alarm_playing:
-            try:
-                pygame.mixer.music.load("alarm.wav")
-                pygame.mixer.music.play(-1) # Loop play
-                alarm_playing = True
-            except:
-                pass
-    else:
-        #JAise hi phone hatega, warning box khali (empty) ho jayega
-        alert_placeholder.empty()
-        
-        if pygame_available and alarm_playing:
-            pygame.mixer.music.stop()
-            alarm_playing = False
-
-    # --- DISPLAY ---
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    frame_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
-
-    time.sleep(0.01)
-
-cap.release()
-cv2.destroyAllWindows()
-alert_placeholder.empty() 
-st.success("Camera Closed Successfully.")
+st.info("Note: Sound is disabled in Cloud Mode for stability.")
